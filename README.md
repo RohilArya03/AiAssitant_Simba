@@ -4,8 +4,6 @@ A fully self-hosted personal AI assistant — no OpenAI, no Claude, no external 
 Open-source model (Llama/Mistral) served locally via Ollama/vLLM, with a hand-built
 RAG pipeline, hand-built agent orchestration, and LoRA/PEFT fine-tuning on top.
 
-(Formerly called "Jarvis" during early planning — renamed to Simba, same project.)
-
 ## Status
 
 Phase 1 — Self-hosted foundation. Not yet functional — scaffold only.
