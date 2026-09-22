@@ -1,4 +1,4 @@
-from app.rag.chunker import pack_paragraphs  # adjust import to wherever you saved this
+from app.rag.chunker import pack_paragraphs ,split_into_paragraphs
 
 paragraphs = [
     "This is the first paragraph about a dentist appointment on Tuesday.",
@@ -9,4 +9,19 @@ paragraphs = [
 
 result = pack_paragraphs(paragraphs, max_chunk_size=100)
 for i, chunk in enumerate(result):
+    print(f"Chunk {i}: length {len(chunk)} (limit was 100)")
+
+
+raw_notes = """Dentist appt Tuesday 2pm.
+
+
+Call contractor about the fence.
+
+Pay rent by the 1st."""
+
+paragraphs = split_into_paragraphs(raw_notes)
+print(paragraphs)
+
+chunks = pack_paragraphs(paragraphs, max_chunk_size=100)
+for i, chunk in enumerate(chunks):
     print(f"Chunk {i}: length {len(chunk)} (limit was 100)")
