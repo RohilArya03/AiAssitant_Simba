@@ -5,6 +5,7 @@ from app.llm.client import generate, generate_with_tools, ModelServingError
 
 TOOLS = []
 TOOL_FUNCTIONS = {}
+TOOL_DEFINITIONS = {}
 
 for _, module_name, _ in pkgutil.iter_modules(tools_package.__path__):
     module = importlib.import_module(f"app.orchestration.tools.{module_name}")
@@ -15,6 +16,7 @@ for _, module_name, _ in pkgutil.iter_modules(tools_package.__path__):
     if tool_def is not None and tool_execute is not None:
         TOOLS.append(tool_def)
         TOOL_FUNCTIONS[tool_def["function"]["name"]] = tool_execute
+        TOOL_DEFINITIONS[tool_def["function"]["name"]] = tool_def
 
 def execute_tool_call(tool_call: dict) -> str:
     """
@@ -47,14 +49,23 @@ def answer_question(question: str) -> str:
     messages.append(response)
     
     if "tool_calls" in response:
+        any_needs_synthesis = False
         for tool_call in response["tool_calls"]:
             result = execute_tool_call(tool_call)
             messages.append({"role": "tool", "content": result})
+            print("DEBUG Messages: ", messages)
+            tool_name = tool_call["function"]["name"]
+            if TOOL_DEFINITIONS.get(tool_name, {}).get("needs_synthesis", True):
+                any_needs_synthesis = True
         
-        try:
-            final_response = generate(messages)
-            return final_response
-        except ModelServingError as e:
-            return f"Sorry, I'm having trouble right now: {e}"
+        if any_needs_synthesis:
+            try:
+                final_response = generate(messages)
+                return final_response
+            except ModelServingError as e:
+                return f"Sorry, I'm having trouble right now: {e}"
+        else:
+            # No synthesis needed — just return the last tool's raw result directly
+            return result
     
     return response["content"]

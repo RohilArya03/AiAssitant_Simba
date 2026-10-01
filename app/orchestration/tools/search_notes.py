@@ -13,7 +13,8 @@ TOOL_DEFINITION = {
             },
             "required": ["question"]
         }
-    }
+    },
+    "needs_synthesis": True
 }
 
 def execute(question: str) -> list[str]:
