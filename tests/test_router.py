@@ -7,6 +7,8 @@ from app.orchestration.router import build_synthesis_messages
 
 import logging
 
+logging.basicConfig(level=logging.ERROR)
+
 def test_execute_tool_call_unregistered_tool():
     fake_tool_call = {
         "function": {
