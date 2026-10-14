@@ -1,5 +1,6 @@
 import pkgutil
 import importlib
+import logging
 import app.orchestration.tools as tools_package
 from app.llm.client import generate, generate_with_tools, ModelServingError
 
@@ -18,6 +19,21 @@ for _, module_name, _ in pkgutil.iter_modules(tools_package.__path__):
         TOOL_FUNCTIONS[tool_def["function"]["name"]] = tool_execute
         TOOL_DEFINITIONS[tool_def["function"]["name"]] = tool_def
 
+def build_synthesis_messages(question: str, results: list) -> list:
+    """
+    Build a list of messages for the model to synthesize a final answer.
+    """
+    system_prompt = "The notes belong to the user. Answer the question based on the provided notes. " \
+    "Do not say you can not access the notes and do not ask for more details when the answer is in the notes. " \
+    "If the notes do not have the information needed, say so."  # your instruction text
+    notes = "\n".join(results)     # all results as one string
+    user_prompt = f"Notes:\n{notes}\n\nQuestion: {question}"
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
 def execute_tool_call(tool_call: dict) -> str:
     """
     Run a registered tool call and return the tool output as a string.
@@ -31,6 +47,7 @@ def execute_tool_call(tool_call: dict) -> str:
         tool_result = TOOL_FUNCTIONS[tool_name](**tool_args)
         return "\n".join(tool_result)
     except Exception as e:
+        logging.exception(f"Error executing tool {tool_name}: {str(e)}")
         return f"Error executing tool {tool_name}: {str(e)}"
 
 
@@ -50,22 +67,25 @@ def answer_question(question: str) -> str:
     
     if "tool_calls" in response:
         any_needs_synthesis = False
+        collected_results = []  # <-- new: track every result, not just the last one
+        
         for tool_call in response["tool_calls"]:
             result = execute_tool_call(tool_call)
             messages.append({"role": "tool", "content": result})
-            print("DEBUG Messages: ", messages)
+            collected_results.append(result)  # <-- new
+
             tool_name = tool_call["function"]["name"]
             if TOOL_DEFINITIONS.get(tool_name, {}).get("needs_synthesis", True):
                 any_needs_synthesis = True
         
         if any_needs_synthesis:
             try:
-                final_response = generate(messages)
+                final_response = generate(build_synthesis_messages(question, collected_results))
                 return final_response
             except ModelServingError as e:
                 return f"Sorry, I'm having trouble right now: {e}"
         else:
-            # No synthesis needed — just return the last tool's raw result directly
-            return result
-    
-    return response["content"]
+            # If no tool calls need synthesis, return the concatenated results
+            return "\n".join(collected_results)
+    else:
+        return response["content"]
