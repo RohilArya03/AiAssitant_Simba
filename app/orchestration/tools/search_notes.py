@@ -14,7 +14,8 @@ TOOL_DEFINITION = {
             "required": ["question"]
         }
     },
-    "needs_synthesis": True
+    "needs_synthesis": True,
+    "use_original_question": True
 }
 
 def execute(question: str) -> list[str]:

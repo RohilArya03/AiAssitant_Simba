@@ -1,6 +1,8 @@
 import pkgutil
 import importlib
 import logging
+import json
+from typing import Optional
 import app.orchestration.tools as tools_package
 from app.llm.client import generate, generate_with_tools, ModelServingError
 
@@ -34,6 +36,22 @@ def build_synthesis_messages(question: str, results: list) -> list:
         {"role": "user", "content": user_prompt},
     ]
 
+def extract_text_tool_call(content: str) -> Optional[dict]:
+    cleaned = content.replace("\\'", "'")  # model wrote \' which is invalid JSON
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+    name = parsed.get("name")
+    parameters = parsed.get("parameters")
+    if name not in TOOL_FUNCTIONS or not isinstance(parameters, dict):
+        return None
+
+    return {"function": {"name": name, "arguments": parameters}}
+
 def execute_tool_call(tool_call: dict) -> str:
     """
     Run a registered tool call and return the tool output as a string.
@@ -62,6 +80,11 @@ def answer_question(question: str) -> str:
         response = generate_with_tools(messages, TOOLS)
     except ModelServingError as e:
         return f"Sorry, I'm having trouble right now: {e}"
+
+    if "tool_calls" not in response:
+        text_call = extract_text_tool_call(response.get("content", ""))
+        if text_call:
+            response["tool_calls"] = [text_call]
     
     messages.append(response)
     
@@ -70,11 +93,13 @@ def answer_question(question: str) -> str:
         collected_results = []  # <-- new: track every result, not just the last one
         
         for tool_call in response["tool_calls"]:
+            tool_name = tool_call["function"]["name"]
+            if TOOL_DEFINITIONS.get(tool_name, {}).get("use_original_question"):
+                tool_call["function"]["arguments"]["question"] = question
             result = execute_tool_call(tool_call)
             messages.append({"role": "tool", "content": result})
             collected_results.append(result)  # <-- new
 
-            tool_name = tool_call["function"]["name"]
             if TOOL_DEFINITIONS.get(tool_name, {}).get("needs_synthesis", True):
                 any_needs_synthesis = True
         
